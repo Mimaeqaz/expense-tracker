@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f54">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Expenses">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Daily Expense Tracker</title>
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#17231d;--mute:#667a70;--line:#dce5df;--acc:#1f6f54;--exp:#c2410c;--inc:#15803d;--sel:#e3f1ea;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1713;--card:#17231d;--ink:#e6efe9;--mute:#8da398;--line:#26372f;--acc:#4cc59a;--exp:#fb923c;--inc:#4ade80;--sel:#1f3a2f}}
+:root[data-theme="dark"]{--bg:#0f1713;--card:#17231d;--ink:#e6efe9;--mute:#8da398;--line:#26372f;--acc:#4cc59a;--exp:#fb923c;--inc:#4ade80;--sel:#1f3a2f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;line-height:1.4}
+main{max-width:980px;margin:0 auto;padding:16px;display:grid;gap:14px}
+h1{font-size:1.4rem;margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sum div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.sum small{color:var(--mute);display:block}
+.sum b{font-size:1.25rem}
+.exp{color:var(--exp)}.inc{color:var(--inc)}
+.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.nav h2{margin:0;font-size:1.15rem}
+button,select,input{font:inherit;color:var(--ink)}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button:focus-visible,input:focus-visible,select:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dow{text-align:center;color:var(--mute);font-size:.8rem;padding:4px 0}
+.day{min-height:68px;border:1px solid var(--line);border-radius:8px;padding:4px;background:var(--card);cursor:pointer;font-size:.72rem;overflow:hidden;text-align:left}
+.day.off{visibility:hidden;cursor:default}
+.day .n{font-weight:700;font-size:.85rem}
+.day.today .n{color:var(--acc);text-decoration:underline}
+.day.sel{background:var(--sel);border-color:var(--acc)}
+.day span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;gap:6px;margin:8px 0}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.form{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.form label{display:grid;gap:2px;font-size:.8rem;color:var(--mute)}
+.form input,.form select{padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--bg);width:100%}
+.form .full{grid-column:1/-1}
+ul{list-style:none;margin:10px 0 0;padding:0}
+li{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+li small{color:var(--mute);display:block}
+li button{padding:2px 8px}
+.empty{color:var(--mute);margin:10px 0 0}
+@media(max-width:560px){.day{min-height:54px;font-size:.62rem}.sum b{font-size:1rem}}
+</style>
+</head>
+<body>
+<main>
+<h1>Daily Expense Tracker</h1>
+<section class="sum" aria-label="Monthly totals">
+<div><small>Earnings this month</small><b class="inc" id="mi">0</b></div>
+<div><small>Expenses this month</small><b class="exp" id="me">0</b></div>
+<div><small>Balance</small><b id="mb">0</b></div>
+</section>
+<section class="card">
+<div class="nav"><button id="prev" aria-label="Previous month">&lt;</button><h2 id="title"></h2><button id="next" aria-label="Next month">&gt;</button></div>
+<div class="grid" id="dows"></div>
+<div class="grid" id="cal"></div>
+</section>
+<section class="card">
+<h2 id="dayTitle" style="margin:0 0 4px;font-size:1.1rem"></h2>
+<div id="dayTotals" style="color:var(--mute)"></div>
+<div class="tabs"><button id="tE" class="on">Add expense</button><button id="tI">Add earning</button></div>
+<div class="form" id="form">
+<label class="full">Item<input id="name" placeholder="e.g. Lunch"></label>
+<label>Type<select id="type"></select></label>
+<label>Amount (each)<input id="amt" type="number" min="0" step="0.01" inputmode="decimal"></label>
+<label id="qtyL">How many<input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric"></label>
+<label class="full" style="align-content:end"><button class="primary" id="add">Add expense</button></label>
+</div>
+<div id="err" class="exp" style="margin-top:6px"></div>
+<ul id="list"></ul>
+</section>
+</main>
+<script>
+var P="\u20B1",KEY="expense-tracker-v1";
+var TYPES={e:["Food","Transport","School","Bills","Shopping","Health","Entertainment","Other"],i:["Salary","Allowance","Other"]};
+var data=[];try{data=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){data=[]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+var now=new Date(),y=now.getFullYear(),m=now.getMonth(),sel=iso(now),kind="e";
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function money(n){return P+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+function tot(it){return it.amt*it.qty}
+function sums(list){var e=0,i=0;list.forEach(function(x){if(x.kind==="e")e+=tot(x);else i+=tot(x)});return{e:e,i:i}}
+var $=function(id){return document.getElementById(id)};
+$("dows").innerHTML=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(function(d){return '<div class="dow">'+d+"</div>"}).join("");
+function setKind(k){kind=k;$("tE").classList.toggle("on",k==="e");$("tI").classList.toggle("on",k==="i");
+$("type").innerHTML=TYPES[k].map(function(t){return "<option>"+t+"</option>"}).join("");
+$("qtyL").style.display=k==="e"?"grid":"none";$("add").textContent=k==="e"?"Add expense":"Add earning";
+$("name").placeholder=k==="e"?"e.g. Lunch":"e.g. Monthly pay (optional)"}
+function render(){
+var first=new Date(y,m,1),days=new Date(y,m+1,0).getDate(),h="";
+$("title").textContent=first.toLocaleString(undefined,{month:"long",year:"numeric"});
+for(var b=0;b<first.getDay();b++)h+='<div class="day off"></div>';
+for(var d=1;d<=days;d++){var k=iso(new Date(y,m,d)),s=sums(data.filter(function(x){return x.date===k}));
+h+='<button class="day'+(k===sel?" sel":"")+(k===iso(now)?" today":"")+'" data-d="'+k+'"><span class="n">'+d+"</span>"+(s.i?'<span class="inc">+'+Math.round(s.i)+"</span>":"")+(s.e?'<span class="exp">-'+Math.round(s.e)+"</span>":"")+"</button>"}
+$("cal").innerHTML=h;
+var pre=y+"-"+String(m+1).padStart(2,"0"),ms=sums(data.filter(function(x){return x.date.indexOf(pre)===0}));
+$("mi").textContent=money(ms.i);$("me").textContent=money(ms.e);$("mb").textContent=money(ms.i-ms.e);
+var dl=data.filter(function(x){return x.date===sel}),ds=sums(dl);
+$("dayTitle").textContent=new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+$("dayTotals").innerHTML='Day total: <b class="exp">'+money(ds.e)+'</b> spent &nbsp; <b class="inc">'+money(ds.i)+"</b> earned";
+$("list").innerHTML=dl.length?dl.map(function(x){return "<li><div><b>"+esc(x.name||x.type)+'</b><small>'+x.type+(x.kind==="e"?" \u2022 "+x.qty+" \u00D7 "+money(x.amt):"")+'</small></div><div><b class="'+(x.kind==="e"?"exp":"inc")+'">'+(x.kind==="e"?"-":"+")+money(tot(x))+'</b> <button data-x="'+x.id+'" aria-label="Delete">Delete</button></div></li>'}).join(""):'<p class="empty">Nothing on this day yet. Add an expense or earning above.</p>'}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+$("cal").onclick=function(e){var b=e.target.closest("[data-d]");if(b){sel=b.dataset.d;render()}};
+$("list").onclick=function(e){var b=e.target.closest("[data-x]");if(b){data=data.filter(function(x){return String(x.id)!==b.dataset.x});save();render()}};
+$("prev").onclick=function(){m--;if(m<0){m=11;y--}render()};
+$("next").onclick=function(){m++;if(m>11){m=0;y++}render()};
+$("tE").onclick=function(){setKind("e")};$("tI").onclick=function(){setKind("i")};
+$("add").onclick=function(){
+var amt=parseFloat($("amt").value),qty=kind==="e"?parseInt($("qty").value,10):1;
+if(!(amt>0)){$("err").textContent="Enter an amount greater than 0.";return}
+if(!(qty>=1)){$("err").textContent="Enter how many (at least 1).";return}
+$("err").textContent="";
+data.push({id:Date.now()+Math.random(),date:sel,kind:kind,type:$("type").value,name:$("name").value.trim(),amt:amt,qty:qty});
+save();$("name").value="";$("amt").value="";$("qty").value=1;render()};
+setKind("e");render();
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}</script>
+</body>
+</html>
