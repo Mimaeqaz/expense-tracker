@@ -46,7 +46,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .day.sel .n{background:var(--acc);color:#fff}
 .chip{font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .zero{font-size:.68rem;color:var(--mute)}
-.plus{position:absolute;right:8px;bottom:6px;color:var(--mute);font-size:1.1rem;opacity:0}
+.day{cursor:pointer}.day.off{cursor:default}
+.plus{position:absolute;right:6px;bottom:6px;width:26px;height:26px;padding:0;border-radius:50%;background:var(--soft);color:var(--mute);font-size:1.1rem;line-height:1;opacity:0}
+.plus:hover,.plus:focus-visible{background:var(--accb);border-color:var(--accb);color:#fff;opacity:1}
 .day:hover .plus,.day.sel .plus{opacity:1}
 @media(hover:none){.plus{opacity:.6}}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;position:sticky;top:12px}
@@ -81,7 +83,7 @@ dialog h3{margin:0 0 8px}
 </head>
 <body>
 <main>
-<div class="top"><h1>Daily Expense Tracker</h1></div>
+<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="exp">Export backup</button><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
 <section class="sum" aria-label="Monthly totals">
 <div><small>Earnings this month</small><b class="inc" id="mi"></b></div>
 <div><small>Expenses this month</small><b class="exp" id="me"></b></div>
@@ -117,7 +119,13 @@ var P="\u20B1",KEY="expense-tracker-v1",ZKEY="expense-tracker-zero-v1";
 var TYPES={e:["Food","Transport","School","Bills","Shopping","Health","Entertainment","Other"],i:["Salary","Allowance","Other"]};
 function load(k){try{return JSON.parse(localStorage.getItem(k)||"[]")}catch(e){return[]}}
 var data=load(KEY),zeros=load(ZKEY);
-function save(){try{localStorage.setItem(KEY,JSON.stringify(data));localStorage.setItem(ZKEY,JSON.stringify(zeros))}catch(e){}}
+var TKEY="expense-tracker-t-v1",lt=0,cdoc=null;try{lt=+localStorage.getItem(TKEY)||0}catch(e){}
+function store(){try{localStorage.setItem(KEY,JSON.stringify(data));localStorage.setItem(ZKEY,JSON.stringify(zeros));localStorage.setItem(TKEY,lt)}catch(e){}}
+function push(){if(cdoc)cdoc.set({json:JSON.stringify({data:data,zeros:zeros,t:lt})}).catch(function(){setSync("Cloud save failed - kept on this device")})}
+function save(){lt=Date.now();store();push()}
+function setSync(t){var e=document.getElementById("sync");if(e)e.textContent=t}
+function uni(a,b){var o={};a.concat(b).forEach(function(x){o[x.id]=x});return Object.keys(o).map(function(k){return o[k]})}
+function uz(a,b){return a.concat(b.filter(function(x){return a.indexOf(x)<0}))}
 var now=new Date(),y=now.getFullYear(),m=now.getMonth(),sel=iso(now),kind="e";
 function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function money(n){return P+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -138,7 +146,7 @@ var first=new Date(y,m,1),days=new Date(y,m+1,0).getDate(),h="",pre=y+"-"+String
 $("title").textContent=first.toLocaleString(undefined,{month:"long",year:"numeric"});
 for(var b=0;b<first.getDay();b++)h+='<div class="day off"></div>';
 for(var d=1;d<=days;d++){var k=iso(new Date(y,m,d)),s=sums(data.filter(function(x){return x.date===k}));
-h+='<button class="day'+(k===sel?" sel":"")+(k===iso(now)?" today":"")+'" data-d="'+k+'" aria-label="Add entry for '+k+'"><span class="n">'+d+"</span>"+(s.i?'<span class="chip inc">+'+money(s.i)+"</span>":"")+(s.e?'<span class="chip exp">-'+money(s.e)+"</span>":"")+(!s.e&&!s.i&&zeros.indexOf(k)>-1?'<span class="zero">Zero spend</span>':"")+'<span class="plus">+</span></button>'}
+h+='<div class="day'+(k===sel?" sel":"")+(k===iso(now)?" today":"")+'" data-d="'+k+'" tabindex="0" role="button" aria-label="Select '+k+'"><span class="n">'+d+"</span>"+(s.i?'<span class="chip inc">+'+money(s.i)+"</span>":"")+(s.e?'<span class="chip exp">-'+money(s.e)+"</span>":"")+(!s.e&&!s.i&&zeros.indexOf(k)>-1?'<span class="zero">Zero spend</span>':"")+'<button class="plus" data-add="'+k+'" aria-label="Add entry for '+k+'">+</button></div>'}
 var rem=(7-(first.getDay()+days)%7)%7;for(var r=0;r<rem;r++)h+='<div class="day off"></div>';
 $("cal").innerHTML=h;
 var ms=sums(data.filter(function(x){return x.date.indexOf(pre)===0}));
@@ -150,7 +158,8 @@ $("dinc").textContent=ds.i?"+"+money(ds.i)+" earned":"";
 $("status").textContent="Status: "+(dl.length?dl.length+" entr"+(dl.length===1?"y":"ies"):isZ?"Zero spend day":"No entries yet");
 $("zeroBtn").style.display=dl.length?"none":"";$("zeroBtn").textContent=isZ?"Undo Zero Spend":"Mark Zero Spend";
 $("body").innerHTML=dl.length?"<ul>"+dl.map(function(x){return "<li><div><b>"+esc(x.name||x.type)+"</b><small>"+x.type+(x.kind==="e"?" \u2022 "+x.qty+" \u00D7 "+money(x.amt):" \u2022 Earning")+'</small></div><div><b class="'+(x.kind==="e"?"exp":"inc")+'">'+(x.kind==="e"?"-":"+")+money(tot(x))+'</b> <button data-x="'+x.id+'" aria-label="Delete entry">Delete</button></div></li>'}).join("")+"</ul>":'<div class="empty">No expenses logged for this date.<br><button id="first">+ Log first expense</button></div>'}
-$("cal").onclick=function(e){var b=e.target.closest("[data-d]");if(b){sel=b.dataset.d;render();openDlg("e")}};
+$("cal").onclick=function(e){var p=e.target.closest("[data-add]"),b=e.target.closest("[data-d]");if(p){sel=p.dataset.add;render();openDlg("e")}else if(b){sel=b.dataset.d;render()}};
+$("cal").onkeydown=function(e){var b=e.target.closest&&e.target.closest("[data-d]");if(b&&e.target===b&&(e.key==="Enter"||e.key===" ")){e.preventDefault();sel=b.dataset.d;render()}};
 $("body").onclick=function(e){var b=e.target.closest("[data-x]");if(b){data=data.filter(function(x){return String(x.id)!==b.dataset.x});save();render()}if(e.target.id==="first")openDlg("e")};
 $("addTop").onclick=function(){openDlg("e")};
 $("zeroBtn").onclick=function(){var i=zeros.indexOf(sel);if(i>-1)zeros.splice(i,1);else zeros.push(sel);save();render()};
@@ -166,6 +175,25 @@ var zi=zeros.indexOf(sel);if(zi>-1)zeros.splice(zi,1);
 data.push({id:Date.now()+Math.random(),date:sel,kind:kind,type:$("type").value,name:$("name").value.trim(),amt:amt,qty:qty});
 save();$("name").value="";$("amt").value="";$("qty").value=1;$("dlg").close();render()};
 setKind("e");render();
+$("exp").onclick=async function(){var txt=JSON.stringify({data:data,zeros:zeros},null,1),fn="expense-backup-"+iso(new Date())+".json";
+try{var dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:fn,data:txt});return}}catch(e){}
+var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));a.download=fn;a.click()};
+$("imp").onclick=function(){$("file").click()};
+$("file").onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var j=JSON.parse(r.result);data=uni(data,j.data||[]);zeros=uz(zeros,j.zeros||[]);save();render();setSync("Backup imported")}catch(e){alert("That file isn't a valid backup.")}};r.readAsText(f);this.value=""};
+(async function(){try{
+if(!window.claude||!claude.use)return;
+var db=await claude.use("db"),us=await claude.use("user");if(!db||!us)return;
+var id=await us.id();if(!id)return;
+var ref=db.collection("data/users/"+id).doc("tracker"),first=true,ok="\u2601 Synced to your account";
+cdoc=ref;
+ref.onSnapshot(function(sn){
+if(!sn.exists){if(first){first=false;if(data.length||zeros.length){lt=lt||Date.now();push()}setSync(ok)}return}
+var r;try{r=JSON.parse(sn.data().json)}catch(e){return}
+if(first&&lt===0&&(data.length||zeros.length)){first=false;data=uni(data,r.data||[]);zeros=uz(zeros,r.zeros||[]);save();render();setSync(ok);return}
+first=false;
+if((r.t||0)>lt){data=r.data||[];zeros=r.zeros||[];lt=r.t;store();render()}
+setSync(ok)},function(){setSync("Saved on this device only")});
+}catch(e){}})();
 </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}</script>
 </body>
