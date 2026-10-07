@@ -83,7 +83,7 @@ dialog h3{margin:0 0 8px}
 </head>
 <body>
 <main>
-<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="exp">Export backup</button><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
+<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="signin">Sign in with Google</button><button id="exp">Export backup</button><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
 <section class="sum" aria-label="Monthly totals">
 <div><small>Earnings this month</small><b class="inc" id="mi"></b></div>
 <div><small>Expenses this month</small><b class="exp" id="me"></b></div>
@@ -196,5 +196,31 @@ setSync(ok)},function(){setSync("Saved on this device only")});
 }catch(e){}})();
 </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}</script>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getFirestore,doc,setDoc,onSnapshot} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+var cfg={apiKey:"AIzaSyBJnLHfYeyfIIZo8ecuPUzj_7RW1pzwNpk",authDomain:"daily-expense-tracker-ff1df.firebaseapp.com",projectId:"daily-expense-tracker-ff1df",storageBucket:"daily-expense-tracker-ff1df.firebasestorage.app",messagingSenderId:"16550269336",appId:"1:16550269336:web:ded2d0f422b9ae88825bed"};
+var app=initializeApp(cfg),auth=getAuth(app),fdb=getFirestore(app),unsub=null,btn=document.getElementById("signin");
+btn.onclick=async function(){
+if(auth.currentUser){await signOut(auth);return}
+var p=new GoogleAuthProvider();
+try{await signInWithPopup(auth,p)}catch(e){if(e.code!=="auth/popup-closed-by-user"&&e.code!=="auth/cancelled-popup-request"){try{await signInWithRedirect(auth,p)}catch(e2){setSync("Sign-in failed: "+(e2.code||"error"))}}}};
+getRedirectResult(auth).catch(function(e){setSync("Sign-in failed: "+(e.code||"error"))});
+onAuthStateChanged(auth,function(u){
+if(unsub){unsub();unsub=null}
+if(!u){cdoc=null;btn.textContent="Sign in with Google";setSync("Saved on this device only");return}
+btn.textContent="Sign out";
+var ref=doc(fdb,"users",u.uid),first=true,ok="\u2601 Synced as "+(u.email||"you");
+cdoc={set:function(o){return setDoc(ref,o)}};
+unsub=onSnapshot(ref,function(sn){
+if(!sn.exists()){if(first){first=false;if(data.length||zeros.length){lt=lt||Date.now();push()}setSync(ok)}return}
+var r;try{r=JSON.parse(sn.data().json)}catch(e){return}
+if(first&&lt===0&&(data.length||zeros.length)){first=false;data=uni(data,r.data||[]);zeros=uz(zeros,r.zeros||[]);save();render();setSync(ok);return}
+first=false;
+if((r.t||0)>lt){data=r.data||[];zeros=r.zeros||[];lt=r.t;store();render()}
+setSync(ok)},function(){setSync("Cloud unavailable - saved on this device")});
+});
+</script>
 </body>
 </html>
