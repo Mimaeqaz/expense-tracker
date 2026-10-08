@@ -30,7 +30,14 @@ button,select,input{font:inherit;color:var(--ink)}
 button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px}
 button.primary{background:var(--accb);border-color:var(--accb);color:#fff;font-weight:600}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-.layout{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+.layout{display:grid;grid-template-columns:240px 1fr 340px;gap:16px;align-items:start}
+.months{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.months h3{margin:0 0 8px;font-size:.95rem}
+.mrow{display:grid;grid-template-columns:1fr 1fr;width:100%;text-align:left;padding:8px;margin-bottom:6px;border-radius:10px;gap:2px 8px;font-size:.76rem}
+.mrow b{font-size:.85rem}.mrow .bal{text-align:right;font-weight:700;font-size:.85rem}.mrow small:last-child{text-align:right}
+.mrow.cur{background:var(--sel);border-color:var(--accb)}
+.mtot{border-top:2px solid var(--line);margin-top:8px;padding-top:10px;display:grid;gap:4px;font-size:.85rem}
+.mtot .empty{padding:0}
 .cal{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .nav{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
 .nav h2{margin:0;font-size:1.1rem}
@@ -77,20 +84,31 @@ dialog h3{margin:0 0 8px}
 .form input,.form select{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);width:100%}
 .full{grid-column:1/-1}
 .crow{display:flex;gap:6px;margin-bottom:6px}.crow input{flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+.sumbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;overflow:hidden}
+.sumbox h2{margin:0 0 8px;font-size:1.1rem}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-size:.75rem;font-weight:600;background:var(--soft)}
+tbody tr{cursor:pointer}tbody tr:hover,tr.cur{background:var(--sel)}
+tfoot td{font-weight:800;border-bottom:0;background:var(--soft)}
 .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-@media(max-width:860px){.layout{grid-template-columns:1fr}.panel{position:static}}
+@media(max-width:1150px){.layout{grid-template-columns:1fr 340px}.months{grid-column:1/-1;position:static;max-height:320px}}
+@media(max-width:860px){.layout{grid-template-columns:1fr}.panel{position:static}.months{order:3}}
 @media(max-width:560px){.day{min-height:62px;padding:4px}.chip{font-size:.62rem}.zero{display:none}.sum b{font-size:1rem}}
 </style>
 </head>
 <body>
 <main>
-<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="cats">Edit categories</button><button id="signin">Sign in with Google</button><button id="exp">Export backup</button><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
+<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="cats">Edit categories</button><button id="signin">Sign in with Google</button><button id="exp">Export backup</button><button id="xl">Import Excel</button><input id="xfile" type="file" accept=".xlsx,.xls,.csv" hidden><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
 <section class="sum" aria-label="Monthly totals">
 <div><small>Earnings this month</small><b class="inc" id="mi"></b></div>
 <div><small>Expenses this month</small><b class="exp" id="me"></b></div>
 <div><small>Balance</small><b id="mb"></b></div>
 </section>
 <div class="layout">
+<aside class="months" id="msum" aria-label="Totals per month"></aside>
 <section class="cal">
 <div class="nav"><button id="prev" aria-label="Previous month">&lt;</button><h2 id="title"></h2><button id="next" aria-label="Next month">&gt;</button></div>
 <div class="grid" id="dows"></div>
@@ -102,6 +120,7 @@ dialog h3{margin:0 0 8px}
 <div class="body" id="body"></div>
 </aside>
 </div>
+<section class="sumbox"><h2>Monthly summary</h2><div class="tw"><table id="stbl"></table></div></section>
 </main>
 <dialog id="dlg">
 <h3 id="dlgTitle"></h3>
@@ -140,6 +159,11 @@ function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"
 function money(n){return P+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
 function tot(x){return x.amt*x.qty}
 function sums(l){var e=0,i=0;l.forEach(function(x){if(x.kind==="e")e+=tot(x);else i+=tot(x)});return{e:e,i:i}}
+function renderSummary(){var by={};data.forEach(function(x){var k=x.date.slice(0,7),o=by[k]||(by[k]={e:0,i:0});o[x.kind]+=tot(x)});
+var ks=Object.keys(by).sort(),te=0,ti=0,cur=y+"-"+String(m+1).padStart(2,"0"),h="<thead><tr><th>Month</th><th>Earned</th><th>Expenses</th><th>Balance</th></tr></thead><tbody>";
+ks.forEach(function(k){var o=by[k];te+=o.e;ti+=o.i;h+='<tr data-m="'+k+'"'+(k===cur?' class="cur"':"")+"><td>"+new Date(k+"-01T00:00").toLocaleString(undefined,{month:"long",year:"numeric"})+'</td><td class="inc">'+money(o.i)+'</td><td class="exp">'+money(o.e)+"</td><td>"+money(o.i-o.e)+"</td></tr>"});
+h+='</tbody><tfoot><tr><td>Overall total</td><td class="inc">'+money(ti)+'</td><td class="exp">'+money(te)+"</td><td>"+money(ti-te)+"</td></tr></tfoot>";
+$("stbl").innerHTML=ks.length?h:'<tbody><tr><td style="text-align:left;color:var(--mute)">No entries yet.</td></tr></tbody>'}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 var $=function(id){return document.getElementById(id)};
 $("dows").innerHTML=["SUN","MON","TUE","WED","THU","FRI","SAT"].map(function(d){return '<div class="dow">'+d+"</div>"}).join("");
@@ -164,7 +188,12 @@ h+='<div class="day'+(k===sel?" sel":"")+(k===iso(now)?" today":"")+'" data-d="'
 var rem=(7-(first.getDay()+days)%7)%7;for(var r=0;r<rem;r++)h+='<div class="day off"></div>';
 $("cal").innerHTML=h;
 var ms=sums(data.filter(function(x){return x.date.indexOf(pre)===0}));
-$("mi").textContent=money(ms.i);$("me").textContent=money(ms.e);$("mb").textContent=money(ms.i-ms.e);
+renderSummary();$("mi").textContent=money(ms.i);$("me").textContent=money(ms.e);$("mb").textContent=money(ms.i-ms.e);
+var g={};data.forEach(function(x){var k=x.date.slice(0,7),o=g[k]||(g[k]={e:0,i:0});if(x.kind==="e")o.e+=tot(x);else o.i+=tot(x)});
+var ks=Object.keys(g).sort(),TE=0,TI=0,mh="";
+ks.forEach(function(k){var o=g[k],bl=o.i-o.e;TE+=o.e;TI+=o.i;var dd=new Date(+k.slice(0,4),+k.slice(5,7)-1,1);
+mh+='<button class="mrow'+(k===pre?" cur":"")+'" data-m="'+k+'"><b>'+dd.toLocaleString(undefined,{month:"short",year:"numeric"})+'</b><span class="bal '+(bl<0?"exp":"inc")+'">'+money(bl)+'</span><small class="inc">+'+money(o.i)+'</small><small class="exp">-'+money(o.e)+'</small></button>'});
+$("msum").innerHTML="<h3>Totals per month</h3>"+(mh||'<p class="empty">No entries yet.</p>')+'<div class="mtot"><b>Overall total</b><span class="inc">Earned: '+money(TI)+'</span><span class="exp">Spent: '+money(TE)+'</span><span>Balance: <b class="'+(TI-TE<0?"exp":"inc")+'">'+money(TI-TE)+"</b></span></div>";
 var dl=data.filter(function(x){return x.date===sel}),ds=sums(dl),ez=dl.filter(function(x){return x.kind==="e"}).length,isZ=zeros.indexOf(sel)>-1;
 $("dt").textContent=new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric",year:"numeric"});
 $("dtot").textContent=money(ds.e);$("dcnt").textContent="("+ez+" item"+(ez===1?"":"s")+")";
@@ -177,6 +206,8 @@ $("cal").onkeydown=function(e){var b=e.target.closest&&e.target.closest("[data-d
 $("body").onclick=function(e){var b=e.target.closest("[data-x]");if(b){data=data.filter(function(x){return String(x.id)!==b.dataset.x});save();render()}var ed=e.target.closest("[data-e]");if(ed){var q=data.filter(function(z){return String(z.id)===ed.dataset.e})[0];if(q)openDlg(null,q)}if(e.target.id==="first")openDlg("e")};
 $("addTop").onclick=function(){openDlg("e")};
 $("zeroBtn").onclick=function(){var i=zeros.indexOf(sel);if(i>-1)zeros.splice(i,1);else zeros.push(sel);save();render()};
+$("stbl").onclick=function(e){var r=e.target.closest("[data-m]");if(r){var k=r.dataset.m;y=+k.slice(0,4);m=+k.slice(5)-1;sel=k+"-01";render();window.scrollTo(0,0)}};
+$("msum").onclick=function(e){var b=e.target.closest("[data-m]");if(b){y=+b.dataset.m.slice(0,4);m=+b.dataset.m.slice(5,7)-1;render()}};
 $("prev").onclick=function(){m--;if(m<0){m=11;y--}render()};
 $("next").onclick=function(){m++;if(m>11){m=0;y++}render()};
 $("tE").onclick=function(){setKind("e")};$("tI").onclick=function(){setKind("i")};
@@ -189,6 +220,29 @@ var zi=zeros.indexOf(sel);if(zi>-1)zeros.splice(zi,1);
 if(editId!==null){var ex=data.filter(function(z){return z.id===editId})[0];if(ex){ex.kind=kind;ex.type=$("type").value;ex.name=$("name").value.trim();ex.amt=amt;ex.qty=qty}editId=null}else data.push({id:Date.now()+Math.random(),date:sel,kind:kind,type:$("type").value,name:$("name").value.trim(),amt:amt,qty:qty});
 save();$("name").value="";$("amt").value="";$("qty").value=1;$("dlg").close();render()};
 setKind("e");render();
+function loadX(){return new Promise(function(res,rej){if(window.XLSX)return res();var e=document.createElement("script");e.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";e.onload=res;e.onerror=rej;document.head.appendChild(e)})}
+function pick(keys,res){for(var i=0;i<res.length;i++)for(var j=0;j<keys.length;j++)if(res[i].test(keys[j]))return keys[j];return null}
+function toDate(v){if(v instanceof Date&&!isNaN(v))return iso(new Date(v.getTime()+432e5));if(typeof v==="number"&&v>20000)return iso(new Date(Math.round((v-25569)*864e5)+432e5+new Date().getTimezoneOffset()*0));var d=new Date(String(v));return isNaN(d)?null:iso(d)}
+$("xl").onclick=function(){$("xfile").click()};
+$("xfile").onchange=async function(){var f=this.files[0];this.value="";if(!f)return;
+try{await loadX()}catch(e){alert("Couldn't load the Excel reader. Check your internet connection and try again.");return}
+try{var wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true}),add=0,dup=0,bad=0,last="";
+var have={};data.forEach(function(x){have[[x.date,x.kind,x.type,x.name,x.amt,x.qty].join("|")]=1});
+wb.SheetNames.forEach(function(sn){var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:"",raw:true});if(!rows.length)return;
+var ks=Object.keys(rows[0]),cD=pick(ks,[/date|day|petsa/i]),cA=pick(ks,[/amount|price|cost|gastos|halaga/i,/total|value/i]),cQ=pick(ks,[/qty|quantity|how many|pcs|count/i]),cT=pick(ks,[/type|categ/i]),cN=pick(ks,[/item|name|desc|particular|detail|note/i]),cK=pick(ks,[/kind|entry|income|expense|earning/i]);
+if(!cD||!cA){bad+=rows.length;return}
+rows.forEach(function(r){var dt=toDate(r[cD]),amt=parseFloat(String(r[cA]).replace(/[^0-9.\-]/g,""));
+if(!dt||!(amt>0)){bad++;return}
+var ty=String(cT?r[cT]:"").trim(),nm=String(cN?r[cN]:"").trim(),kd=String(cK?r[cK]:"");
+var k=/earn|income|salary|allowance/i.test(kd+" "+ty)?"i":"e";
+if(!ty)ty="Other";var q=k==="e"?Math.max(1,parseInt(cQ?r[cQ]:1,10)||1):1;
+if(TYPES[k].indexOf(ty)<0)TYPES[k].push(ty);
+var key=[dt,k,ty,nm,amt,q].join("|");if(have[key]){dup++;return}have[key]=1;
+data.push({id:Date.now()+Math.random(),date:dt,kind:k,type:ty,name:nm,amt:amt,qty:q});add++;if(dt>last)last=dt})});
+if(add){save();if(last){y=+last.slice(0,4);m=+last.slice(5,7)-1;sel=last}render()}
+alert("Imported "+add+" entr"+(add===1?"y":"ies")+(dup?", skipped "+dup+" duplicate"+(dup===1?"":"s"):"")+(bad?", could not read "+bad+" row"+(bad===1?"":"s")+" (needs a Date column and an Amount column in the first row)":"")+".")
+}catch(e){alert("That file couldn't be read. Use an .xlsx or .csv file with the headers in the first row.")}};
+
 var ck="e";
 function renderCats(){$("cE").classList.toggle("on",ck==="e");$("cI").classList.toggle("on",ck==="i");
 $("clist").innerHTML=TYPES[ck].map(function(t,i){return '<div class="crow"><input value="'+esc(t)+'" data-i="'+i+'" aria-label="Category name"><button data-del="'+i+'">Delete</button></div>'}).join("")}
@@ -249,6 +303,12 @@ setSync(ok)},function(){setSync("Cloud unavailable - saved on this device")});
 });
 </script>
 </body>
+</html>
+
+</html>
+
+</html>
+
 </html>
 
 </html>
