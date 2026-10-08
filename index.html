@@ -76,6 +76,7 @@ dialog h3{margin:0 0 8px}
 .form label{display:grid;gap:3px;font-size:.8rem;color:var(--mute)}
 .form input,.form select{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);width:100%}
 .full{grid-column:1/-1}
+.crow{display:flex;gap:6px;margin-bottom:6px}.crow input{flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
 .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 @media(max-width:860px){.layout{grid-template-columns:1fr}.panel{position:static}}
 @media(max-width:560px){.day{min-height:62px;padding:4px}.chip{font-size:.62rem}.zero{display:none}.sum b{font-size:1rem}}
@@ -83,7 +84,7 @@ dialog h3{margin:0 0 8px}
 </head>
 <body>
 <main>
-<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="signin">Sign in with Google</button><button id="exp">Export backup</button><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
+<div class="top"><h1>Daily Expense Tracker</h1><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="sync" style="font-size:.78rem;color:var(--mute)">Saved on this device only</span><button id="cats">Edit categories</button><button id="signin">Sign in with Google</button><button id="exp">Export backup</button><button id="imp">Import backup</button><input id="file" type="file" accept=".json,application/json" hidden></div></div>
 <section class="sum" aria-label="Monthly totals">
 <div><small>Earnings this month</small><b class="inc" id="mi"></b></div>
 <div><small>Expenses this month</small><b class="exp" id="me"></b></div>
@@ -114,14 +115,22 @@ dialog h3{margin:0 0 8px}
 <div id="err" class="exp" style="margin-top:6px"></div>
 <div class="acts"><button id="cancel">Cancel</button><button class="primary" id="add">Add expense</button></div>
 </dialog>
+<dialog id="cdlg">
+<h3>Edit categories</h3>
+<div class="tabs"><button id="cE" class="on">Expense</button><button id="cI">Earning</button></div>
+<div id="clist"></div>
+<p style="font-size:.75rem;color:var(--mute);margin:4px 0 8px">Renaming updates your existing entries. Deleting only removes it from the list; old entries keep their label.</p>
+<div class="acts" style="justify-content:space-between"><div style="display:flex;gap:6px;flex:1"><input id="cnew" placeholder="New category" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft)"><button class="primary" id="cadd">Add</button></div><button id="cdone">Done</button></div>
+</dialog>
 <script>
 var P="\u20B1",KEY="expense-tracker-v1",ZKEY="expense-tracker-zero-v1";
 var TYPES={e:["Food","Transport","School","Bills","Shopping","Health","Entertainment","Other"],i:["Salary","Allowance","Other"]};
 function load(k){try{return JSON.parse(localStorage.getItem(k)||"[]")}catch(e){return[]}}
 var data=load(KEY),zeros=load(ZKEY);
+try{var tt=JSON.parse(localStorage.getItem("expense-tracker-types-v1"));if(tt&&tt.e&&tt.i)TYPES=tt}catch(e){}
 var TKEY="expense-tracker-t-v1",lt=0,cdoc=null;try{lt=+localStorage.getItem(TKEY)||0}catch(e){}
-function store(){try{localStorage.setItem(KEY,JSON.stringify(data));localStorage.setItem(ZKEY,JSON.stringify(zeros));localStorage.setItem(TKEY,lt)}catch(e){}}
-function push(){if(cdoc)cdoc.set({json:JSON.stringify({data:data,zeros:zeros,t:lt})}).catch(function(){setSync("Cloud save failed - kept on this device")})}
+function store(){try{localStorage.setItem(KEY,JSON.stringify(data));localStorage.setItem(ZKEY,JSON.stringify(zeros));localStorage.setItem(TKEY,lt);localStorage.setItem("expense-tracker-types-v1",JSON.stringify(TYPES))}catch(e){}}
+function push(){if(cdoc)cdoc.set({json:JSON.stringify({data:data,zeros:zeros,types:TYPES,t:lt})}).catch(function(){setSync("Cloud save failed - kept on this device")})}
 function save(){lt=Date.now();store();push()}
 function setSync(t){var e=document.getElementById("sync");if(e)e.textContent=t}
 function uni(a,b){var o={};a.concat(b).forEach(function(x){o[x.id]=x});return Object.keys(o).map(function(k){return o[k]})}
@@ -135,11 +144,16 @@ function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;
 var $=function(id){return document.getElementById(id)};
 $("dows").innerHTML=["SUN","MON","TUE","WED","THU","FRI","SAT"].map(function(d){return '<div class="dow">'+d+"</div>"}).join("");
 function setKind(k){kind=k;$("tE").classList.toggle("on",k==="e");$("tI").classList.toggle("on",k==="i");
-$("type").innerHTML=TYPES[k].map(function(t){return "<option>"+t+"</option>"}).join("");
+fillTypes(k);
 $("qtyL").style.display=k==="e"?"grid":"none";$("add").textContent=k==="e"?"Add expense":"Add earning";
 $("name").placeholder=k==="e"?"e.g. Lunch":"e.g. Monthly pay (optional)"}
-function openDlg(k){setKind(k||"e");$("err").textContent="";
-$("dlgTitle").textContent="Add entry for "+new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+var editId=null;
+function fillTypes(k,cur){var l=TYPES[k].slice();if(cur&&l.indexOf(cur)<0)l.push(cur);$("type").innerHTML=l.map(function(t){return "<option>"+esc(t)+"</option>"}).join("");if(cur)$("type").value=cur}
+function openDlg(k,x){editId=x?x.id:null;setKind(x?x.kind:(k||"e"));$("err").textContent="";
+if(x){fillTypes(x.kind,x.type);$("name").value=x.name||"";$("amt").value=x.amt;$("qty").value=x.qty;$("add").textContent="Save changes"}
+else{$("name").value="";$("amt").value="";$("qty").value=1}
+$("tE").parentNode.style.display=x?"none":"";
+$("dlgTitle").textContent=(x?"Edit entry for ":"Add entry for ")+new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
 $("dlg").showModal();$("name").focus()}
 function render(){
 var first=new Date(y,m,1),days=new Date(y,m+1,0).getDate(),h="",pre=y+"-"+String(m+1).padStart(2,"0");
@@ -157,10 +171,10 @@ $("dtot").textContent=money(ds.e);$("dcnt").textContent="("+ez+" item"+(ez===1?"
 $("dinc").textContent=ds.i?"+"+money(ds.i)+" earned":"";
 $("status").textContent="Status: "+(dl.length?dl.length+" entr"+(dl.length===1?"y":"ies"):isZ?"Zero spend day":"No entries yet");
 $("zeroBtn").style.display=dl.length?"none":"";$("zeroBtn").textContent=isZ?"Undo Zero Spend":"Mark Zero Spend";
-$("body").innerHTML=dl.length?"<ul>"+dl.map(function(x){return "<li><div><b>"+esc(x.name||x.type)+"</b><small>"+x.type+(x.kind==="e"?" \u2022 "+x.qty+" \u00D7 "+money(x.amt):" \u2022 Earning")+'</small></div><div><b class="'+(x.kind==="e"?"exp":"inc")+'">'+(x.kind==="e"?"-":"+")+money(tot(x))+'</b> <button data-x="'+x.id+'" aria-label="Delete entry">Delete</button></div></li>'}).join("")+"</ul>":'<div class="empty">No expenses logged for this date.<br><button id="first">+ Log first expense</button></div>'}
+$("body").innerHTML=dl.length?"<ul>"+dl.map(function(x){return "<li><div><b>"+esc(x.name||x.type)+"</b><small>"+x.type+(x.kind==="e"?" \u2022 "+x.qty+" \u00D7 "+money(x.amt):" \u2022 Earning")+'</small></div><div><b class="'+(x.kind==="e"?"exp":"inc")+'">'+(x.kind==="e"?"-":"+")+money(tot(x))+'</b> <button data-e="'+x.id+'" aria-label="Edit entry">Edit</button> <button data-x="'+x.id+'" aria-label="Delete entry">Delete</button></div></li>'}).join("")+"</ul>":'<div class="empty">No expenses logged for this date.<br><button id="first">+ Log first expense</button></div>'}
 $("cal").onclick=function(e){var p=e.target.closest("[data-add]"),b=e.target.closest("[data-d]");if(p){sel=p.dataset.add;render();openDlg("e")}else if(b){sel=b.dataset.d;render()}};
 $("cal").onkeydown=function(e){var b=e.target.closest&&e.target.closest("[data-d]");if(b&&e.target===b&&(e.key==="Enter"||e.key===" ")){e.preventDefault();sel=b.dataset.d;render()}};
-$("body").onclick=function(e){var b=e.target.closest("[data-x]");if(b){data=data.filter(function(x){return String(x.id)!==b.dataset.x});save();render()}if(e.target.id==="first")openDlg("e")};
+$("body").onclick=function(e){var b=e.target.closest("[data-x]");if(b){data=data.filter(function(x){return String(x.id)!==b.dataset.x});save();render()}var ed=e.target.closest("[data-e]");if(ed){var q=data.filter(function(z){return String(z.id)===ed.dataset.e})[0];if(q)openDlg(null,q)}if(e.target.id==="first")openDlg("e")};
 $("addTop").onclick=function(){openDlg("e")};
 $("zeroBtn").onclick=function(){var i=zeros.indexOf(sel);if(i>-1)zeros.splice(i,1);else zeros.push(sel);save();render()};
 $("prev").onclick=function(){m--;if(m<0){m=11;y--}render()};
@@ -172,14 +186,26 @@ var amt=parseFloat($("amt").value),qty=kind==="e"?parseInt($("qty").value,10):1;
 if(!(amt>0)){$("err").textContent="Enter an amount greater than 0.";return}
 if(!(qty>=1)){$("err").textContent="Enter how many (at least 1).";return}
 var zi=zeros.indexOf(sel);if(zi>-1)zeros.splice(zi,1);
-data.push({id:Date.now()+Math.random(),date:sel,kind:kind,type:$("type").value,name:$("name").value.trim(),amt:amt,qty:qty});
+if(editId!==null){var ex=data.filter(function(z){return z.id===editId})[0];if(ex){ex.kind=kind;ex.type=$("type").value;ex.name=$("name").value.trim();ex.amt=amt;ex.qty=qty}editId=null}else data.push({id:Date.now()+Math.random(),date:sel,kind:kind,type:$("type").value,name:$("name").value.trim(),amt:amt,qty:qty});
 save();$("name").value="";$("amt").value="";$("qty").value=1;$("dlg").close();render()};
 setKind("e");render();
-$("exp").onclick=async function(){var txt=JSON.stringify({data:data,zeros:zeros},null,1),fn="expense-backup-"+iso(new Date())+".json";
+var ck="e";
+function renderCats(){$("cE").classList.toggle("on",ck==="e");$("cI").classList.toggle("on",ck==="i");
+$("clist").innerHTML=TYPES[ck].map(function(t,i){return '<div class="crow"><input value="'+esc(t)+'" data-i="'+i+'" aria-label="Category name"><button data-del="'+i+'">Delete</button></div>'}).join("")}
+$("cats").onclick=function(){ck="e";renderCats();$("cdlg").showModal()};
+$("cE").onclick=function(){ck="e";renderCats()};$("cI").onclick=function(){ck="i";renderCats()};
+$("clist").onchange=function(e){var i=+e.target.dataset.i,old=TYPES[ck][i],nv=e.target.value.trim();
+if(!nv||(nv!==old&&TYPES[ck].indexOf(nv)>-1)){e.target.value=old;return}
+if(nv!==old){data.forEach(function(x){if(x.kind===ck&&x.type===old)x.type=nv});TYPES[ck][i]=nv;save();render()}};
+$("clist").onclick=function(e){var b=e.target.closest("[data-del]");if(b&&TYPES[ck].length>1){TYPES[ck].splice(+b.dataset.del,1);save();renderCats()}};
+$("cadd").onclick=function(){var v=$("cnew").value.trim();if(v&&TYPES[ck].indexOf(v)<0){TYPES[ck].push(v);save()}$("cnew").value="";renderCats()};
+$("cnew").onkeydown=function(e){if(e.key==="Enter")$("cadd").onclick()};
+$("cdone").onclick=function(){$("cdlg").close()};
+$("exp").onclick=async function(){var txt=JSON.stringify({data:data,zeros:zeros,types:TYPES},null,1),fn="expense-backup-"+iso(new Date())+".json";
 try{var dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:fn,data:txt});return}}catch(e){}
 var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));a.download=fn;a.click()};
 $("imp").onclick=function(){$("file").click()};
-$("file").onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var j=JSON.parse(r.result);data=uni(data,j.data||[]);zeros=uz(zeros,j.zeros||[]);save();render();setSync("Backup imported")}catch(e){alert("That file isn't a valid backup.")}};r.readAsText(f);this.value=""};
+$("file").onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var j=JSON.parse(r.result);data=uni(data,j.data||[]);zeros=uz(zeros,j.zeros||[]);if(j.types){["e","i"].forEach(function(k){if(j.types[k])TYPES[k]=uz(TYPES[k],j.types[k])})}save();render();setSync("Backup imported")}catch(e){alert("That file isn't a valid backup.")}};r.readAsText(f);this.value=""};
 (async function(){try{
 if(!window.claude||!claude.use)return;
 var db=await claude.use("db"),us=await claude.use("user");if(!db||!us)return;
@@ -191,7 +217,7 @@ if(!sn.exists){if(first){first=false;if(data.length||zeros.length){lt=lt||Date.n
 var r;try{r=JSON.parse(sn.data().json)}catch(e){return}
 if(first&&lt===0&&(data.length||zeros.length)){first=false;data=uni(data,r.data||[]);zeros=uz(zeros,r.zeros||[]);save();render();setSync(ok);return}
 first=false;
-if((r.t||0)>lt){data=r.data||[];zeros=r.zeros||[];lt=r.t;store();render()}
+if((r.t||0)>lt){data=r.data||[];zeros=r.zeros||[];if(r.types&&r.types.e&&r.types.i)TYPES=r.types;lt=r.t;store();render()}
 setSync(ok)},function(){setSync("Saved on this device only")});
 }catch(e){}})();
 </script>
@@ -218,9 +244,11 @@ if(!sn.exists()){if(first){first=false;if(data.length||zeros.length){lt=lt||Date
 var r;try{r=JSON.parse(sn.data().json)}catch(e){return}
 if(first&&lt===0&&(data.length||zeros.length)){first=false;data=uni(data,r.data||[]);zeros=uz(zeros,r.zeros||[]);save();render();setSync(ok);return}
 first=false;
-if((r.t||0)>lt){data=r.data||[];zeros=r.zeros||[];lt=r.t;store();render()}
+if((r.t||0)>lt){data=r.data||[];zeros=r.zeros||[];if(r.types&&r.types.e&&r.types.i)TYPES=r.types;lt=r.t;store();render()}
 setSync(ok)},function(){setSync("Cloud unavailable - saved on this device")});
 });
 </script>
 </body>
+</html>
+
 </html>
