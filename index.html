@@ -138,7 +138,8 @@ tfoot td{font-weight:800;border-bottom:0;background:var(--soft)}
 </div>
 </div>
 <section id="pageSum" class="card" hidden><h2 style="margin:0 0 4px;font-size:1.2rem">Monthly totals</h2><p style="margin:0 0 10px;color:var(--mute);font-size:.85rem">Click a month to open it in the calendar.</p><div style="overflow-x:auto" id="msum"></div>
-<h3 style="margin:18px 0 8px">Spending by category</h3><select id="cm" style="padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--soft);margin-bottom:10px"></select><div id="catChart"></div>
+<h3 style="margin:18px 0 4px">Overall spending by category</h3><p id="catAllT" style="margin:0 0 10px;color:var(--mute);font-size:.85rem"></p><div id="catAll"></div>
+<h3 style="margin:22px 0 8px">Spending by category per month</h3><select id="cm" style="padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--soft);margin-bottom:10px"></select><div id="catChart"></div>
 <h3 style="margin:18px 0 8px">Earned vs spent by month</h3><div id="monChart"></div></section>
 <div id="toast" class="toast" hidden></div>
 </main>
@@ -225,6 +226,8 @@ var cl=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]}),cmx=cl.leng
 $("catChart").innerHTML=cl.length?cl.map(function(c){return '<div class="brow"><div class="bl"><span>'+esc(c)+"</span><span>"+money(cats[c])+" <small>("+Math.round(cats[c]/csum*100)+"%)</small>"+'</span></div><div class="bt"><i style="width:'+Math.max(2,cats[c]/cmx*100)+'%;background:var(--acc)"></i></div></div>'}).join(""):'<p class="empty" style="text-align:left">No expenses for this month.</p>';
 var mxx=1;ks.forEach(function(k){mxx=Math.max(mxx,g[k].e,g[k].i)});
 $("monChart").innerHTML=ks.length?'<div class="mc">'+ks.map(function(k){var o=g[k];return '<div class="mcol"><div class="mbars"><i class="mi" style="height:'+o.i/mxx*100+'%" title="Earned '+money(o.i)+'"></i><i class="me" style="height:'+o.e/mxx*100+'%" title="Spent '+money(o.e)+'"></i></div><small>'+new Date(+k.slice(0,4),+k.slice(5,7)-1,1).toLocaleString(undefined,{month:"short",year:"2-digit"})+"</small></div>"}).join("")+'</div><p class="lg"><span class="inc">&#9632; Earned</span> &nbsp; <span class="exp">&#9632; Spent</span></p>':"";
+var allc={},allt=0,em={};data.forEach(function(x){if(x.kind==="e"){allc[x.type]=(allc[x.type]||0)+tot(x);allt+=tot(x);em[x.date.slice(0,7)]=1}});
+$("catAll").innerHTML=catRows(allc,allt);var nm=Object.keys(em).length;$("catAllT").textContent=allt?"Total spent: "+money(allt)+" across "+nm+" month"+(nm===1?"":"s"):"";
 if(!$("qres").hidden)renderSearch();
 var dl=data.filter(function(x){return x.date===sel}),ds=sums(dl),ez=dl.filter(function(x){return x.kind==="e"}).length,isZ=zeros.indexOf(sel)>-1;
 $("dt").textContent=new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric",year:"numeric"});
@@ -276,6 +279,7 @@ if(add){save();if(last){y=+last.slice(0,4);m=+last.slice(5,7)-1;sel=last}render(
 alert("Imported "+add+" entr"+(add===1?"y":"ies")+(dup?", skipped "+dup+" duplicate"+(dup===1?"":"s"):"")+(bad?", could not read "+bad+" row"+(bad===1?"":"s")+" (needs a Date column and an Amount column in the first row)":"")+".")
 }catch(e){alert("That file couldn't be read. Use an .xlsx or .csv file with the headers in the first row.")}};
 
+function catRows(c,total){var l=Object.keys(c).sort(function(a,b){return c[b]-c[a]}),mx=l.length?c[l[0]]:1;return l.length?l.map(function(k){return '<div class="brow"><div class="bl"><span>'+esc(k)+"</span><span>"+money(c[k])+" <small>("+Math.round(c[k]/total*100)+'%)</small></span></div><div class="bt"><i style="width:'+Math.max(2,c[k]/mx*100)+'%;background:var(--acc)"></i></div></div>'}).join(""):'<p class="empty" style="text-align:left">No expenses yet.</p>'}
 var tt2=null;function toast(msg,label,fn){var t=$("toast");t.innerHTML="<span>"+esc(msg)+"</span>"+(label?'<button id="tundo">'+label+"</button>":"");t.hidden=false;if(label)$("tundo").onclick=function(){t.hidden=true;fn()};clearTimeout(tt2);tt2=setTimeout(function(){t.hidden=true},6000)}
 $("chips").onclick=function(e){var b=e.target.closest("[data-c]");if(!b)return;var x=chipList[+b.dataset.c];fillTypes("e",x.type);$("name").value=x.name;$("amt").value=x.amt;$("qty").value=x.qty;$("amt").focus()};
 document.querySelector(".more").onclick=function(e){if(e.target.closest("button"))this.open=false};
@@ -352,6 +356,8 @@ setSync(ok)},function(){setSync("Cloud unavailable - saved on this device")});
 });
 </script>
 </body>
+</html>
+
 </html>
 
 </html>
